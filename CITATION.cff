@@ -1,0 +1,24 @@
+cff-version: 1.2.0
+message: "If you use agent-forensics in your research, please cite it as below."
+title: "agent-forensics: provenance and incident-reconstruction for AI agent memory"
+abstract: >-
+  agent-forensics is a digital-forensics and incident-response toolkit for AI
+  agent memory. It captures every memory read and write with cryptographically
+  signed, tamper-evident provenance in an append-only ledger and provenance DAG,
+  and reconstructs incidents by tracing actions to their originating memory and
+  source, computing blast radius, detecting belief drift, verifying integrity,
+  and producing rollback plans.
+type: software
+authors:
+  - given-names: Lav
+    family-names: Kumar
+    email: lav.kumar.dev@gmail.com
+keywords:
+  - ai-agents
+  - memory-forensics
+  - provenance
+  - tamper-evident
+  - incident-response
+  - llm-security
+license: Apache-2.0
+repository-code: "https://github.com/lavkumarv/agent-forensics"
