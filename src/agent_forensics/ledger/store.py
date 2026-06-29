@@ -14,7 +14,9 @@ from collections.abc import Iterator
 from datetime import UTC, datetime
 from importlib import resources
 from pathlib import Path
-from typing import TYPE_CHECKING, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
+
+import orjson
 
 from agent_forensics.crypto.hashing import b3, b3_raw
 from agent_forensics.merkle.tree import compute_root
@@ -154,6 +156,19 @@ class LedgerStore:
     def rows(self) -> Iterator[sqlite3.Row]:
         """Yield all ledger rows in append (``seq``) order."""
         yield from self._conn.execute("SELECT * FROM ledger ORDER BY seq ASC")
+
+    def payload(self, record_id: str) -> dict[str, Any] | None:
+        """Return the parsed signable payload of a record, or None if absent."""
+        row = self.get(record_id)
+        if row is None:
+            return None
+        parsed: dict[str, Any] = orjson.loads(row["payload_json"])
+        return parsed
+
+    def iter_payloads(self) -> Iterator[tuple[sqlite3.Row, dict[str, Any]]]:
+        """Yield each row paired with its parsed payload, in seq order."""
+        for row in self.rows():
+            yield row, orjson.loads(row["payload_json"])
 
     @property
     def connection(self) -> sqlite3.Connection:
