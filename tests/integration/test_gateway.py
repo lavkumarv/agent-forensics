@@ -1,0 +1,114 @@
+"""Tests for the MCP gateway (spec §15.10)."""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any
+
+import pytest
+
+from agent_forensics.capture.engine import Forensics
+from agent_forensics.capture.gateway import McpGateway
+from agent_forensics.capture.wrapper import CallCtx, ReadMap, WriteMap
+from agent_forensics.crypto import keys
+from agent_forensics.model.records import Source, SourceType
+
+
+class FakeMcpMemoryServer:
+    """A minimal stand-in for an MCP memory server's tools/call handler."""
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, dict[str, Any]]] = []
+        self._n = 0
+
+    def call(self, name: str, arguments: dict[str, Any]) -> Any:
+        self.calls.append((name, arguments))
+        if name == "create_memory":
+            self._n += 1
+            return {"id": f"node-{self._n}", "status": "ok"}
+        if name == "search_memory":
+            return {"matches": [{"id": "node-1", "score": 0.8}]}
+        return {"status": "ok"}
+
+
+@pytest.fixture
+def forensics(tmp_path: Path) -> Forensics:
+    return Forensics.open(tmp_path / "l.db", keys.generate(), detectors=[])
+
+
+def _gateway(forensics: Forensics, server: FakeMcpMemoryServer) -> McpGateway:
+    write_tools = {
+        "create_memory": WriteMap(
+            content=lambda c: str(c.kwargs.get("content", "")),
+            memory_id=lambda c: c.result.get("id") if isinstance(c.result, dict) else None,
+        )
+    }
+    read_tools = {
+        "search_memory": ReadMap(
+            query=lambda c: str(c.kwargs.get("query", "")),
+            returned=lambda c: [m["id"] for m in c.result.get("matches", [])],
+        )
+    }
+    return McpGateway(
+        forensics,
+        server.call,
+        namespace="t",
+        default_source=Source(
+            source_id="mcp", source_type=SourceType.tool_output, locator="mcp://"
+        ),
+        write_tools=write_tools,
+        read_tools=read_tools,
+    )
+
+
+def test_write_tool_call_is_logged_and_forwarded_unchanged(forensics: Forensics) -> None:
+    server = FakeMcpMemoryServer()
+    gateway = _gateway(forensics, server)
+
+    response = gateway.call_tool("create_memory", {"content": "the capital of France is Paris"})
+
+    # Forwarded byte-identical: the gateway returns the upstream object as-is.
+    assert response == {"id": "node-1", "status": "ok"}
+    assert server.calls == [("create_memory", {"content": "the capital of France is Paris"})]
+    # And a provenance write was logged with the round-tripped memory id.
+    write = next(r for r in forensics.ledger.rows() if r["kind"] == "write")
+    assert '"memory_id":"node-1"' in write["payload_json"]
+
+
+def test_read_tool_call_is_logged_and_forwarded_unchanged(forensics: Forensics) -> None:
+    server = FakeMcpMemoryServer()
+    gateway = _gateway(forensics, server)
+    gateway.call_tool("create_memory", {"content": "Paris"})
+
+    response = gateway.call_tool("search_memory", {"query": "capital of France"})
+
+    assert response == {"matches": [{"id": "node-1", "score": 0.8}]}
+    retrieval = next(r for r in forensics.ledger.rows() if r["kind"] == "retrieval")
+    assert "node-1" in retrieval["payload_json"]
+
+
+def test_unmapped_tool_is_forwarded_without_logging(forensics: Forensics) -> None:
+    server = FakeMcpMemoryServer()
+    gateway = _gateway(forensics, server)
+    response = gateway.call_tool("ping", {})
+    assert response == {"status": "ok"}
+    assert forensics.ledger.count() == 0
+
+
+def test_response_object_identity_preserved(forensics: Forensics) -> None:
+    sentinel = {"id": "x", "payload": object()}
+    gateway = McpGateway(
+        forensics,
+        lambda name, args: sentinel,
+        namespace="t",
+        default_source=Source(source_id="mcp", source_type=SourceType.tool_output),
+        write_tools={},
+        read_tools={},
+    )
+    assert gateway.call_tool("anything", {}) is sentinel
+
+
+def test_callctx_used_by_gateway_specs() -> None:
+    # Guard: the gateway feeds arguments via kwargs in CallCtx.
+    ctx = CallCtx(args=(), kwargs={"content": "hi"}, result={"id": "1"})
+    assert ctx.kwargs["content"] == "hi"
