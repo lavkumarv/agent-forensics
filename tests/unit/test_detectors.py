@@ -152,7 +152,7 @@ def test_trust_scoring_quiet_for_clean_source() -> None:
 
 
 # -- default pack -----------------------------------------------------------
-def test_default_pack_has_all_five_detectors() -> None:
+def test_default_pack_has_all_builtin_detectors() -> None:
     names = {d.name for d in default_pack()}
     assert names == {
         "provenance_missing",
@@ -160,4 +160,5 @@ def test_default_pack_has_all_five_detectors() -> None:
         "unicode_smuggling",
         "write_rate",
         "trust_scoring",
+        "drift",
     }

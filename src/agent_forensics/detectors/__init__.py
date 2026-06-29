@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from agent_forensics.detectors.base import Detector, DetectorContext
+from agent_forensics.detectors.drift import DriftDetector
 from agent_forensics.detectors.injection_scan import InjectionScanDetector
 from agent_forensics.detectors.provenance_missing import ProvenanceMissingDetector
 from agent_forensics.detectors.trust_scoring import TrustScoringDetector
@@ -12,6 +13,7 @@ from agent_forensics.detectors.write_rate import WriteRateDetector
 __all__ = [
     "Detector",
     "DetectorContext",
+    "DriftDetector",
     "InjectionScanDetector",
     "ProvenanceMissingDetector",
     "TrustScoringDetector",
@@ -29,4 +31,5 @@ def default_pack() -> list[Detector]:
         UnicodeSmugglingDetector(),
         WriteRateDetector(),
         TrustScoringDetector(),
+        DriftDetector(),
     ]
