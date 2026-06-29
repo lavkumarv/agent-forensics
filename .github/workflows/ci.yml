@@ -43,7 +43,6 @@ jobs:
       - name: Type check (mypy strict)
         run: uv run mypy
 
-      # Coverage gate (>=90% on core packages) is enabled from milestone M1,
-      # once the integrity-critical code exists to measure.
+      # Coverage gate: >=90% on the integrity-critical core packages (enabled at M1).
       - name: Test
-        run: uv run pytest
+        run: uv run pytest --cov --cov-report=term-missing --cov-fail-under=90
