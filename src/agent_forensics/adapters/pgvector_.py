@@ -1,0 +1,1 @@
+"""pgvector adapter (M9)."""
